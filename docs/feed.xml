@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>HSB-Device</title>
+  <subtitle>Kernel, root and low-level notes for the RMX1971 / Snapdragon 712</subtitle>
+  <link href="https://hsb-device.github.io/feed.xml" rel="self"/>
+  <link href="https://hsb-device.github.io/"/>
+  <id>https://hsb-device.github.io/</id>
+  <updated>2026-10-21T00:00:00Z</updated>
+  <entry>
+    <title>CONFIG_KSU_TAMPER_SYSCALL_TABLE: the only docs are in Kconfig</title>
+    <link href="https://hsb-device.github.io/posts/tamper-syscall-table.html"/>
+    <id>https://hsb-device.github.io/posts/tamper-syscall-table.html</id>
+    <updated>2026-10-21T00:00:00Z</updated>
+    <summary>There is no official KernelSU documentation for syscall-table hooking. The authoritative description lives in the fork&#x27;s kernel/Kconfig help text, and the code says why.</summary>
+    <content type="html">&lt;p&gt;If you go looking for documentation on &lt;code&gt;CONFIG_KSU_TAMPER_SYSCALL_TABLE&lt;/code&gt;, you will not find a page. Not on &lt;code&gt;kernelsu.org&lt;/code&gt;, not in the fork&#x27;s &lt;code&gt;docs/&lt;/code&gt;, not in its &lt;code&gt;website/&lt;/code&gt;. That is not an oversight — the option is a downstream extension, and the source file that implements it says so in its own header:&lt;/p&gt;
+&lt;blockquote&gt;&lt;p&gt;This file is a downstream extension and NOT affiliated, endorsed by, or maintained by the official KernelSU developers.&lt;/p&gt;&lt;/blockquote&gt;
+&lt;p&gt;So the closest thing to documentation is the help text inside &lt;code&gt;kernel/Kconfig&lt;/code&gt; itself. That text is short, but it is precise:&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;config KSU_TAMPER_SYSCALL_TABLE
+	bool &amp;quot;tamper sys_call_table for sucompat + sys_reboot&amp;quot;
+	depends on KSU
+	depends on (ARM || ARM64)
+	default n
+	help
+	  Use a high-performance syscall table hijacking method demonstrated on zx2c4&amp;#x27;s
+	  kernel-assisted-superuser. Replaces sys_reboot, sys_execve, sys_newfstatat,
+	  sys_faccessat, sys_newfstat_ret.
+	  As syscalls are called directly, it avoids indirect branch (blr) overhead and
+	  complies with Clang CFI.
+	  Verified on 3.0 ~ 7.1. Recommended for 3.0 ~ 4.14.&lt;/code&gt;&lt;/pre&gt;
+&lt;h2 id=&quot;what-it-actually-does&quot;&gt;What it actually does&lt;/h2&gt;
+&lt;p&gt;&lt;code&gt;CONFIG_KSU_TAMPER_SYSCALL_TABLE=y&lt;/code&gt; does two things at once:&lt;/p&gt;
+&lt;ul&gt;&lt;li&gt;&lt;strong&gt;sucompat.&lt;/strong&gt; It makes &lt;code&gt;sucompat.c&lt;/code&gt; compile its handlers as &lt;code&gt;static __always_inline&lt;/code&gt;&lt;/li&gt;&lt;/ul&gt;
+&lt;p&gt;and gives them a caller. Without this config (or &lt;code&gt;BRANCH_LINK&lt;/code&gt;), the handlers exist in the binary but nothing ever calls them, so &lt;code&gt;su&lt;/code&gt; never resolves to KernelSU.&lt;/p&gt;
+&lt;ul&gt;&lt;li&gt;&lt;strong&gt;fd channel.&lt;/strong&gt; It replaces &lt;code&gt;sys_reboot&lt;/code&gt;, which is where &lt;code&gt;KSU_INSTALL_MAGIC&lt;/code&gt; is&lt;/li&gt;&lt;/ul&gt;
+&lt;p&gt;handled. That is the same channel &lt;code&gt;ksud&lt;/code&gt; uses to talk to the kernel.&lt;/p&gt;
+&lt;p&gt;That combination is why a build with &lt;code&gt;CONFIG_KSU=y&lt;/code&gt; and LSM hooks enabled can boot, report &lt;code&gt;uid=0&lt;/code&gt; through &lt;code&gt;sudo&lt;/code&gt;, and still have the manager say &lt;em&gt;Failed to grant Root!&lt;/em&gt; — the kernel is there, the userspace channel is not.&lt;/p&gt;
+&lt;h2 id=&quot;why-it-does-not-need-to-fight-rodata&quot;&gt;Why it does not need to fight rodata&lt;/h2&gt;
+&lt;p&gt;The table is &lt;code&gt;const&lt;/code&gt;, and on many Android kernels &lt;code&gt;CONFIG_DEBUG_ALIGN_RODATA=y&lt;/code&gt; maps it read-only. The fork does not write to it directly. It maps a writable alias:&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;phys_to_page(__pa(base)) -&amp;gt; vmap(&amp;amp;page, 1, VM_MAP, PAGE_KERNEL)
+    -&amp;gt; WRITE_ONCE(slot, hook) -&amp;gt; kick_all_cpus_sync()
+    -&amp;gt; vunmap()&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Which means the option is not blocked by read-only page mapping, only by the syscall table being reachable at all.&lt;/p&gt;
+&lt;h2 id=&quot;picking-it-over-the-alternatives&quot;&gt;Picking it over the alternatives&lt;/h2&gt;
+&lt;p&gt;The three hook strategies are mutually exclusive by Kconfig:&lt;/p&gt;
+&lt;div class=&quot;table-wrap&quot;&gt;&lt;table&gt;&lt;thead&gt;&lt;tr&gt;&lt;th&gt;option&lt;/th&gt;&lt;th&gt;depends on&lt;/th&gt;&lt;th&gt;recommended range&lt;/th&gt;&lt;/tr&gt;&lt;/thead&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td&gt;&lt;code&gt;KSU_TAMPER_SYSCALL_TABLE&lt;/code&gt;&lt;/td&gt;&lt;td&gt;`ARM \&lt;/td&gt;&lt;td&gt;\&lt;/td&gt;&lt;td&gt;ARM64`&lt;/td&gt;&lt;td&gt;3.0 – 4.14&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;code&gt;KSU_HACK_ARM64_BRANCH_LINK&lt;/code&gt;&lt;/td&gt;&lt;td&gt;&lt;code&gt;ARM64 &amp;amp;&amp;amp; KALLSYMS&lt;/code&gt;&lt;/td&gt;&lt;td&gt;4.19+&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;code&gt;KSU_KPROBES_KSUD&lt;/code&gt;&lt;/td&gt;&lt;td&gt;&lt;code&gt;KPROBES &amp;amp;&amp;amp; KRETPROBES&lt;/code&gt;&lt;/td&gt;&lt;td&gt;deprecated&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/div&gt;
+&lt;p&gt;Both &lt;code&gt;BRANCH_LINK&lt;/code&gt; and &lt;code&gt;KPROBES_KSUD&lt;/code&gt; carry &lt;code&gt;depends on !KSU_TAMPER_SYSCALL_TABLE&lt;/code&gt;. On a 4.9 kernel the Kconfig recommendation and the architectural fit point at the same option, so that is the one to use — not because it happens to work, but because it is the path the fork maintains for that kernel generation.&lt;/p&gt;
+&lt;h2 id=&quot;verification-not-vibes&quot;&gt;Verification, not vibes&lt;/h2&gt;
+&lt;p&gt;The things worth checking after booting such a build:&lt;/p&gt;
+&lt;ul&gt;&lt;li&gt;&lt;code&gt;/proc/config.gz&lt;/code&gt; shows the option &lt;code&gt;=y&lt;/code&gt; (the CI injection must &lt;em&gt;replace&lt;/em&gt; the&lt;/li&gt;&lt;/ul&gt;
+&lt;p&gt;&lt;code&gt;# ... is not set&lt;/code&gt; line, not append — the later line wins).&lt;/p&gt;
+&lt;ul&gt;&lt;li&gt;&lt;code&gt;/proc/kallsyms&lt;/code&gt; contains the hook symbols (&lt;code&gt;ksu_handle_execveat&lt;/code&gt;, ...).&lt;/li&gt;&lt;li&gt;&lt;code&gt;su -c id&lt;/code&gt; returns &lt;code&gt;uid=0&lt;/code&gt; on a real shell, not just &lt;code&gt;sudo&lt;/code&gt;.&lt;/li&gt;&lt;li&gt;The manager stops showing the root warning.&lt;/li&gt;&lt;li&gt;dmesg shows the unhook of &lt;code&gt;read&lt;/code&gt;/&lt;code&gt;newfstat&lt;/code&gt; happening a few seconds after boot.&lt;/li&gt;&lt;/ul&gt;
+&lt;p&gt;If the symbols are present but nothing is ever called, the config did not land. That is the failure mode this option exists to avoid.&lt;/p&gt;</content>
+  </entry>
+</feed>
