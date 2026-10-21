@@ -9,6 +9,7 @@ Reads content/posts/*.md and site/static/*, writes docs/.
 """
 
 import html
+import json
 import os
 import re
 import shutil
@@ -19,10 +20,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 CONTENT = ROOT / "content" / "posts"
 STATIC = ROOT / "site" / "static"
+DATA = ROOT / "site" / "data"
 OUT = ROOT / "docs"
 
 SITE_TITLE = "HSB-Device"
-SITE_TAGLINE = "Kernel, root and low-level notes for the RMX1971 / Snapdragon 712"
+SITE_TAGLINE = "Experiments, builds and notes from a personal Android device lab."
 SITE_URL = "https://hsb-device.github.io"
 REPO_URL = "https://github.com/HSB-Device"
 
@@ -233,6 +235,85 @@ def post_card(p):
     )
 
 
+# ------------------------------------------------------------------- repo data
+
+
+def load_repos():
+    path = DATA / "repos.json"
+    if not path.exists():
+        return []
+    return json.loads(path.read_text(encoding="utf-8")).get("repos", [])
+
+
+def repo_card(repo):
+    if repo.get("has_page"):
+        title = '<a href="/repos/%s/">%s</a>' % (repo["slug"], html.escape(repo["name"]))
+    else:
+        title = '<a href="%s">%s</a>' % (html.escape(repo["url"]), html.escape(repo["name"]))
+    meta = repo.get("meta", "")
+    meta_html = ' <span class="meta">%s</span>' % html.escape(meta) if meta else ""
+    return (
+        '<article class="card">\n'
+        '  <h2>%s</h2>\n'
+        '  <p class="meta">%s%s</p>\n'
+        '  <p>%s</p>\n'
+        '</article>\n'
+        % (title, html.escape(repo["url"]), meta_html, inline(repo.get("summary", "")))
+    )
+
+
+def changelog_block(repo, limit=5):
+    entries = (repo.get("changelog") or [])[:limit]
+    if not entries:
+        return '<p class="meta">No tagged releases yet.</p>\n'
+    out = []
+    for rel in entries:
+        notes = "".join("<li>%s</li>" % inline(n) for n in rel.get("notes", []))
+        link = rel.get("url") or repo.get("releases_url") or repo["url"]
+        out.append(
+            '<section class="release">\n'
+            '  <h3><a href="%s">%s</a> <span class="meta">%s</span></h3>\n'
+            '  <ul>%s</ul>\n'
+            '</section>\n'
+            % (html.escape(link), html.escape(rel["version"]),
+               html.escape(rel.get("date", "")), notes)
+        )
+    return "".join(out)
+
+
+LANDING_INTRO = (
+    '<h1 class="site-title">%s</h1>\n'
+    '<p class="tagline">%s</p>\n'
+    '<p>A personal lab around one Android device: kernels, builds, experiments, '
+    'and whatever comes out of them.</p>\n'
+)
+
+
+def landing_body(repos):
+    items = "".join(
+        '<li><a href="%s">%s</a> &mdash; %s</li>\n'
+        % (html.escape(r["url"]), html.escape(r["name"]), inline(r.get("summary", "")))
+        for r in repos
+    )
+    philosophy = (
+        '<h2>Philosophy</h2>\n'
+        '<ul>\n'
+        '  <li>Hacky over standard when it buys speed, size, or understanding.</li>\n'
+        '  <li>Read the source, then prove it on the device &mdash; no vibes.</li>\n'
+        '  <li>Every claim is scoped to a configuration and backed by a measurement.</li>\n'
+        '</ul>\n'
+    )
+    return (
+        LANDING_INTRO % (SITE_TITLE, SITE_TAGLINE)
+        + '<h2>Repository</h2>\n<ul>\n%s</ul>\n' % items
+        + philosophy
+        + '<h2>GitHub</h2>\n<p><a href="%s">github.com/HSB-Device</a> &mdash; '
+          'source, releases and CI for everything above.</p>\n' % REPO_URL
+        + '<h2>Blog</h2>\n<p><a href="/home/">All posts</a> &middot; '
+          '<a href="/feed.xml">Atom feed</a></p>\n'
+    )
+
+
 # ----------------------------------------------------------------------- build
 
 
@@ -253,15 +334,48 @@ def build():
         shutil.copy2(f, OUT / f.name)
     (OUT / ".nojekyll").write_text("", encoding="utf-8")
 
+    repos = load_repos()
     cards = "".join(post_card(p) for p in posts) or "<p>No posts yet.</p>"
     index_body = INDEX_HEAD + cards
     (OUT / "index.html").write_text(
-        page(SITE_TITLE, SITE_TAGLINE, index_body), encoding="utf-8"
+        page(SITE_TITLE, SITE_TAGLINE, landing_body(repos)), encoding="utf-8"
     )
     (OUT / "home" / "index.html").write_text(
         page(SITE_TITLE, SITE_TAGLINE, index_body, canonical=SITE_URL + "/home/"),
         encoding="utf-8",
     )
+
+    (OUT / "repos").mkdir(parents=True)
+    repo_cards = "".join(repo_card(r) for r in repos) or "<p>No repositories listed yet.</p>"
+    (OUT / "repos" / "index.html").write_text(
+        page("Repositories", "HSB-Device repositories",
+             "<h1>Repositories</h1>\n" + repo_cards,
+             canonical=SITE_URL + "/repos/"),
+        encoding="utf-8",
+    )
+
+    for r in repos:
+        if not r.get("has_page"):
+            continue
+        latest = "".join(post_card(p) for p in posts[:5]) or "<p>No posts yet.</p>"
+        body = (
+            '<h1>%s</h1>\n<p class="tagline">%s</p>\n'
+            '<p>%s</p>\n<p><a href="%s">source</a> &middot; '
+            '<a href="%s">releases</a></p>\n'
+            '<h2>Changelog by version</h2>\n%s'
+            '<h2>Blog</h2>\n%s'
+            % (html.escape(r["name"]), html.escape(r.get("meta", "")),
+               inline(r.get("summary", "")), html.escape(r["url"]),
+               html.escape(r.get("releases_url") or r["url"] + "/releases"),
+               changelog_block(r), latest)
+        )
+        d = OUT / "repos" / r["slug"]
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "index.html").write_text(
+            page(r["name"], r.get("summary", ""), body,
+                 canonical="%s/repos/%s/" % (SITE_URL, r["slug"])),
+            encoding="utf-8",
+        )
 
     for p in posts:
         tags = " ".join('<span class="tag">%s</span>' % html.escape(t) for t in p["tags"])
@@ -310,7 +424,10 @@ def build():
     (OUT / "feed.xml").write_text("\n".join(feed) + "\n", encoding="utf-8")
 
     urls = ['  <url><loc>%s/</loc></url>' % SITE_URL,
-            '  <url><loc>%s/home/</loc></url>' % SITE_URL]
+            '  <url><loc>%s/home/</loc></url>' % SITE_URL,
+            '  <url><loc>%s/repos/</loc></url>' % SITE_URL]
+    urls += ['  <url><loc>%s/repos/%s/</loc></url>' % (SITE_URL, r["slug"])
+             for r in repos if r.get("has_page")]
     urls += ['  <url><loc>%s/posts/%s/</loc><lastmod>%s</lastmod></url>'
              % (SITE_URL, p["slug"], p["date"]) for p in posts]
     (OUT / "sitemap.xml").write_text(

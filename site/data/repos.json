@@ -1,0 +1,40 @@
+{
+  "repos": [
+    {
+      "slug": "lancex",
+      "name": "LanceX",
+      "url": "https://github.com/HSB-Device/LanceX",
+      "summary": "Linux 4.9.337 kernel for the Realme 5 Pro (RMX1971 / Snapdragon 712), with KernelSU and Simple LMK support.",
+      "meta": "Linux 4.9.337 · ARM64 · RMX1971",
+      "has_page": true,
+      "releases_url": "https://github.com/HSB-Device/LanceX/releases",
+      "changelog": [
+        {
+          "version": "v1.0.0",
+          "date": "2026-10-21",
+          "url": "https://github.com/HSB-Device/LanceX/releases/tag/v1.0.0",
+          "notes": [
+            "Initial Project",
+            "config: drop BloodMoon localversion suffix"
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "anykernel3",
+      "name": "AnyKernel3",
+      "url": "https://github.com/HSB-Device/AnyKernel3",
+      "summary": "AnyKernel3 flashable packaging for RMX1971 kernel builds.",
+      "meta": "flashable zip · branch LanceX",
+      "has_page": false
+    },
+    {
+      "slug": "kernel-builder",
+      "name": "Kernel-Builder",
+      "url": "https://github.com/HSB-Device/Kernel-Builder",
+      "summary": "CI pipeline that cross-compiles LanceX with proton-clang and publishes AnyKernel3 artifacts.",
+      "meta": "GitHub Actions · proton-clang",
+      "has_page": false
+    }
+  ]
+}

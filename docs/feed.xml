@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <feed xmlns="http://www.w3.org/2005/Atom">
   <title>HSB-Device</title>
-  <subtitle>Kernel, root and low-level notes for the RMX1971 / Snapdragon 712</subtitle>
+  <subtitle>Experiments, builds and notes from a personal Android device lab.</subtitle>
   <link href="https://hsb-device.github.io/feed.xml" rel="self"/>
   <link href="https://hsb-device.github.io/"/>
   <id>https://hsb-device.github.io/</id>

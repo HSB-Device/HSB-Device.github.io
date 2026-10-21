@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>HSB-Device</title>
-<meta name="description" content="Kernel, root and low-level notes for the RMX1971 / Snapdragon 712">
+<meta name="description" content="Experiments, builds and notes from a personal Android device lab.">
 <link rel="canonical" href="https://hsb-device.github.io/">
 <link rel="stylesheet" href="/style.css">
 <link rel="alternate" type="application/atom+xml" title="HSB-Device" href="/feed.xml">
@@ -16,16 +16,28 @@
 </header>
 <main>
 <h1 class="site-title">HSB-Device</h1>
-<p class="tagline">Kernel, root and low-level notes for the RMX1971 / Snapdragon 712</p>
-<article class="card">
-  <h2><a href="/posts/tamper-syscall-table/">CONFIG_KSU_TAMPER_SYSCALL_TABLE: the only docs are in Kconfig</a></h2>
-  <p class="meta"><time datetime="2026-10-21">2026-10-21</time> <span class="tag">kernelsu</span> <span class="tag">arm64</span> <span class="tag">4.9</span> <span class="tag">hooking</span></p>
-  <p>There is no official KernelSU documentation for syscall-table hooking. The authoritative description lives in the fork's kernel/Kconfig help text, and the code says why.</p>
-</article>
+<p class="tagline">Experiments, builds and notes from a personal Android device lab.</p>
+<p>A personal lab around one Android device: kernels, builds, experiments, and whatever comes out of them.</p>
+<h2>Repository</h2>
+<ul>
+<li><a href="https://github.com/HSB-Device/LanceX">LanceX</a> &mdash; Linux 4.9.337 kernel for the Realme 5 Pro (RMX1971 / Snapdragon 712), with KernelSU and Simple LMK support.</li>
+<li><a href="https://github.com/HSB-Device/AnyKernel3">AnyKernel3</a> &mdash; AnyKernel3 flashable packaging for RMX1971 kernel builds.</li>
+<li><a href="https://github.com/HSB-Device/Kernel-Builder">Kernel-Builder</a> &mdash; CI pipeline that cross-compiles LanceX with proton-clang and publishes AnyKernel3 artifacts.</li>
+</ul>
+<h2>Philosophy</h2>
+<ul>
+  <li>Hacky over standard when it buys speed, size, or understanding.</li>
+  <li>Read the source, then prove it on the device &mdash; no vibes.</li>
+  <li>Every claim is scoped to a configuration and backed by a measurement.</li>
+</ul>
+<h2>GitHub</h2>
+<p><a href="https://github.com/HSB-Device">github.com/HSB-Device</a> &mdash; source, releases and CI for everything above.</p>
+<h2>Blog</h2>
+<p><a href="/home/">All posts</a> &middot; <a href="/feed.xml">Atom feed</a></p>
 
 </main>
 <footer>
-  <span>HSB-Device — Kernel, root and low-level notes for the RMX1971 / Snapdragon 712</span>
+  <span>HSB-Device — Experiments, builds and notes from a personal Android device lab.</span>
 </footer>
 </body>
 </html>
