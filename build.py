@@ -130,9 +130,10 @@ def markdown(src):
                 row = row.strip()
                 if row.startswith("|"):
                     row = row[1:]
-                if row.endswith("|"):
+                if row.endswith("|") and not row.endswith("\\|"):
                     row = row[:-1]
-                return [c.strip() for c in row.split("|")]
+                parts = re.split(r"(?<!\\)\|", row)
+                return [c.replace("\\|", "|").strip() for c in parts]
 
             head = cells(line)
             i += 2
@@ -140,6 +141,12 @@ def markdown(src):
             while i < len(lines) and lines[i].strip() and "|" in lines[i]:
                 body_rows.append(cells(lines[i]))
                 i += 1
+            for _row in body_rows:
+                if len(_row) != len(head):
+                    raise SystemExit(
+                        "table row width mismatch: header=%d row=%d -> %r"
+                        % (len(head), len(_row), _row)
+                    )
             out.append(
                 '<div class="table-wrap"><table><thead><tr>%s</tr></thead><tbody>%s</tbody></table></div>'
                 % (
