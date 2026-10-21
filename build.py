@@ -197,16 +197,9 @@ PAGE = """<!doctype html>
 <link rel="alternate" type="application/atom+xml" title="{site}" href="/feed.xml">
 </head>
 <body>
-<header class="top">
-  <a class="brand" href="/">{site}</a>
-  <nav><a href="/home/">posts</a><a href="{repo}">github</a><a href="/feed.xml">rss</a></nav>
-</header>
 <main>
 {body}
 </main>
-<footer>
-  <span>{site} — {tagline}</span>
-</footer>
 </body>
 </html>
 """
