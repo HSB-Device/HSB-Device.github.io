@@ -190,13 +190,14 @@ PAGE = """<!doctype html>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{title}</title>
 <meta name="description" content="{desc}">
-<link rel="stylesheet" href="{root}style.css">
-<link rel="alternate" type="application/atom+xml" title="{site}" href="{root}feed.xml">
+<link rel="canonical" href="{canonical}">
+<link rel="stylesheet" href="/style.css">
+<link rel="alternate" type="application/atom+xml" title="{site}" href="/feed.xml">
 </head>
 <body>
 <header class="top">
-  <a class="brand" href="{root}index.html">{site}</a>
-  <nav><a href="{root}index.html">posts</a><a href="{repo}">github</a><a href="{root}feed.xml">rss</a></nav>
+  <a class="brand" href="/">{site}</a>
+  <nav><a href="/home/">posts</a><a href="{repo}">github</a><a href="/feed.xml">rss</a></nav>
 </header>
 <main>
 {body}
@@ -209,10 +210,11 @@ PAGE = """<!doctype html>
 """
 
 
-def page(title, desc, body, root=""):
+def page(title, desc, body, canonical=None):
     return PAGE.format(
         title=html.escape(title), desc=html.escape(desc), body=body,
-        root=root, site=SITE_TITLE, tagline=SITE_TAGLINE, repo=REPO_URL,
+        canonical=html.escape(canonical or SITE_URL + "/"),
+        site=SITE_TITLE, tagline=SITE_TAGLINE, repo=REPO_URL,
     )
 
 
@@ -223,7 +225,7 @@ def post_card(p):
     tags = " ".join('<span class="tag">%s</span>' % html.escape(t) for t in p["tags"])
     return (
         '<article class="card">\n'
-        '  <h2><a href="posts/%s.html">%s</a></h2>\n'
+        '  <h2><a href="/posts/%s/">%s</a></h2>\n'
         '  <p class="meta"><time datetime="%s">%s</time> %s</p>\n'
         '  <p>%s</p>\n'
         '</article>\n' % (p["slug"], html.escape(p["title"]), p["date"], p["date"], tags,
@@ -245,14 +247,20 @@ def build():
     if OUT.exists():
         shutil.rmtree(OUT)
     (OUT / "posts").mkdir(parents=True)
+    (OUT / "home").mkdir(parents=True)
 
     for f in STATIC.glob("*"):
         shutil.copy2(f, OUT / f.name)
     (OUT / ".nojekyll").write_text("", encoding="utf-8")
 
     cards = "".join(post_card(p) for p in posts) or "<p>No posts yet.</p>"
+    index_body = INDEX_HEAD + cards
     (OUT / "index.html").write_text(
-        page(SITE_TITLE, SITE_TAGLINE, INDEX_HEAD + cards), encoding="utf-8"
+        page(SITE_TITLE, SITE_TAGLINE, index_body), encoding="utf-8"
+    )
+    (OUT / "home" / "index.html").write_text(
+        page(SITE_TITLE, SITE_TAGLINE, index_body, canonical=SITE_URL + "/home/"),
+        encoding="utf-8",
     )
 
     for p in posts:
@@ -262,11 +270,20 @@ def build():
             '  <h1>%s</h1>\n'
             '  <p class="meta"><time datetime="%s">%s</time> %s</p>\n'
             '%s\n'
-            '</article>\n<a class="back" href="../index.html">&larr; all posts</a>\n'
+            '</article>\n<a class="back" href="/">&larr; all posts</a>\n'
             % (html.escape(p["title"]), p["date"], p["date"], tags, p["html"])
         )
+        canon = "%s/posts/%s/" % (SITE_URL, p["slug"])
+        (OUT / "posts" / p["slug"]).mkdir(parents=True)
+        (OUT / "posts" / p["slug"] / "index.html").write_text(
+            page(p["title"], p["summary"], body, canonical=canon), encoding="utf-8"
+        )
         (OUT / "posts" / (p["slug"] + ".html")).write_text(
-            page(p["title"], p["summary"], body, root="../"), encoding="utf-8"
+            '<!doctype html><meta charset="utf-8">\n'
+            '<link rel="canonical" href="%s">\n'
+            '<meta http-equiv="refresh" content="0;url=%s">\n'
+            '<title>moved</title><a href="%s">moved</a>\n' % (canon, canon, canon),
+            encoding="utf-8",
         )
 
     feed = ['<?xml version="1.0" encoding="utf-8"?>',
@@ -278,7 +295,7 @@ def build():
             '  <id>%s/</id>' % SITE_URL,
             '  <updated>%sT00:00:00Z</updated>' % (posts[0]["date"] if posts else date.today().isoformat())]
     for p in posts:
-        url = "%s/posts/%s.html" % (SITE_URL, p["slug"])
+        url = "%s/posts/%s/" % (SITE_URL, p["slug"])
         feed += [
             '  <entry>',
             '    <title>%s</title>' % html.escape(p["title"]),
@@ -292,8 +309,9 @@ def build():
     feed.append("</feed>")
     (OUT / "feed.xml").write_text("\n".join(feed) + "\n", encoding="utf-8")
 
-    urls = ['  <url><loc>%s/</loc></url>' % SITE_URL]
-    urls += ['  <url><loc>%s/posts/%s.html</loc><lastmod>%s</lastmod></url>'
+    urls = ['  <url><loc>%s/</loc></url>' % SITE_URL,
+            '  <url><loc>%s/home/</loc></url>' % SITE_URL]
+    urls += ['  <url><loc>%s/posts/%s/</loc><lastmod>%s</lastmod></url>'
              % (SITE_URL, p["slug"], p["date"]) for p in posts]
     (OUT / "sitemap.xml").write_text(
         '<?xml version="1.0" encoding="UTF-8"?>\n'

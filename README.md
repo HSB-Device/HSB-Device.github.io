@@ -40,6 +40,21 @@ git add -A && git commit -m "post: <slug>" && git push
 `python3 build.py --serve` builds and serves `docs/` on <http://127.0.0.1:8080>
 for local preview.
 
+## URLs
+
+Extensionless, served as directory indexes (no Jekyll rewrites involved):
+
+```
+/                          index.html
+/home/                     the post list
+/posts/<slug>/             a post
+/posts/<slug>.html         redirect stub kept for old links
+```
+
+Every link in the generated HTML is absolute (`/style.css`, `/posts/<slug>/`), so
+pages work at any depth. Each page carries a `<link rel="canonical">` pointing at
+its `/`-terminated URL.
+
 ## Pages
 
 GitHub Pages serves this repository from `main` / `/docs`. The `docs/` tree is

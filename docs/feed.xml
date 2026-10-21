@@ -8,8 +8,8 @@
   <updated>2026-10-21T00:00:00Z</updated>
   <entry>
     <title>CONFIG_KSU_TAMPER_SYSCALL_TABLE: the only docs are in Kconfig</title>
-    <link href="https://hsb-device.github.io/posts/tamper-syscall-table.html"/>
-    <id>https://hsb-device.github.io/posts/tamper-syscall-table.html</id>
+    <link href="https://hsb-device.github.io/posts/tamper-syscall-table/"/>
+    <id>https://hsb-device.github.io/posts/tamper-syscall-table/</id>
     <updated>2026-10-21T00:00:00Z</updated>
     <summary>There is no official KernelSU documentation for syscall-table hooking. The authoritative description lives in the fork&#x27;s kernel/Kconfig help text, and the code says why.</summary>
     <content type="html">&lt;p&gt;If you go looking for documentation on &lt;code&gt;CONFIG_KSU_TAMPER_SYSCALL_TABLE&lt;/code&gt;, you will not find a page. Not on &lt;code&gt;kernelsu.org&lt;/code&gt;, not in the fork&#x27;s &lt;code&gt;docs/&lt;/code&gt;, not in its &lt;code&gt;website/&lt;/code&gt;. That is not an oversight — the option is a downstream extension, and the source file that implements it says so in its own header:&lt;/p&gt;

@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CONFIG_KSU_TAMPER_SYSCALL_TABLE: the only docs are in Kconfig</title>
+<meta name="description" content="There is no official KernelSU documentation for syscall-table hooking. The authoritative description lives in the fork&#x27;s kernel/Kconfig help text, and the code says why.">
+<link rel="canonical" href="https://hsb-device.github.io/posts/tamper-syscall-table/">
+<link rel="stylesheet" href="/style.css">
+<link rel="alternate" type="application/atom+xml" title="HSB-Device" href="/feed.xml">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="/">HSB-Device</a>
+  <nav><a href="/home/">posts</a><a href="https://github.com/HSB-Device">github</a><a href="/feed.xml">rss</a></nav>
+</header>
+<main>
+<article class="post">
+  <h1>CONFIG_KSU_TAMPER_SYSCALL_TABLE: the only docs are in Kconfig</h1>
+  <p class="meta"><time datetime="2026-10-21">2026-10-21</time> <span class="tag">kernelsu</span> <span class="tag">arm64</span> <span class="tag">4.9</span> <span class="tag">hooking</span></p>
+<p>If you go looking for documentation on <code>CONFIG_KSU_TAMPER_SYSCALL_TABLE</code>, you will not find a page. Not on <code>kernelsu.org</code>, not in the fork's <code>docs/</code>, not in its <code>website/</code>. That is not an oversight — the option is a downstream extension, and the source file that implements it says so in its own header:</p>
+<blockquote><p>This file is a downstream extension and NOT affiliated, endorsed by, or maintained by the official KernelSU developers.</p></blockquote>
+<p>So the closest thing to documentation is the help text inside <code>kernel/Kconfig</code> itself. That text is short, but it is precise:</p>
+<pre><code>config KSU_TAMPER_SYSCALL_TABLE
+	bool &quot;tamper sys_call_table for sucompat + sys_reboot&quot;
+	depends on KSU
+	depends on (ARM || ARM64)
+	default n
+	help
+	  Use a high-performance syscall table hijacking method demonstrated on zx2c4&#x27;s
+	  kernel-assisted-superuser. Replaces sys_reboot, sys_execve, sys_newfstatat,
+	  sys_faccessat, sys_newfstat_ret.
+	  As syscalls are called directly, it avoids indirect branch (blr) overhead and
+	  complies with Clang CFI.
+	  Verified on 3.0 ~ 7.1. Recommended for 3.0 ~ 4.14.</code></pre>
+<h2 id="what-it-actually-does">What it actually does</h2>
+<p><code>CONFIG_KSU_TAMPER_SYSCALL_TABLE=y</code> does two things at once:</p>
+<ul><li><strong>sucompat.</strong> It makes <code>sucompat.c</code> compile its handlers as <code>static __always_inline</code></li></ul>
+<p>and gives them a caller. Without this config (or <code>BRANCH_LINK</code>), the handlers exist in the binary but nothing ever calls them, so <code>su</code> never resolves to KernelSU.</p>
+<ul><li><strong>fd channel.</strong> It replaces <code>sys_reboot</code>, which is where <code>KSU_INSTALL_MAGIC</code> is</li></ul>
+<p>handled. That is the same channel <code>ksud</code> uses to talk to the kernel.</p>
+<p>That combination is why a build with <code>CONFIG_KSU=y</code> and LSM hooks enabled can boot, report <code>uid=0</code> through <code>sudo</code>, and still have the manager say <em>Failed to grant Root!</em> — the kernel is there, the userspace channel is not.</p>
+<h2 id="why-it-does-not-need-to-fight-rodata">Why it does not need to fight rodata</h2>
+<p>The table is <code>const</code>, and on many Android kernels <code>CONFIG_DEBUG_ALIGN_RODATA=y</code> maps it read-only. The fork does not write to it directly. It maps a writable alias:</p>
+<pre><code>phys_to_page(__pa(base)) -&gt; vmap(&amp;page, 1, VM_MAP, PAGE_KERNEL)
+    -&gt; WRITE_ONCE(slot, hook) -&gt; kick_all_cpus_sync()
+    -&gt; vunmap()</code></pre>
+<p>Which means the option is not blocked by read-only page mapping, only by the syscall table being reachable at all.</p>
+<h2 id="picking-it-over-the-alternatives">Picking it over the alternatives</h2>
+<p>The three hook strategies are mutually exclusive by Kconfig:</p>
+<div class="table-wrap"><table><thead><tr><th>option</th><th>depends on</th><th>recommended range</th></tr></thead><tbody><tr><td><code>KSU_TAMPER_SYSCALL_TABLE</code></td><td><code>ARM || ARM64</code></td><td>3.0 – 4.14</td></tr><tr><td><code>KSU_HACK_ARM64_BRANCH_LINK</code></td><td><code>ARM64 &amp;&amp; KALLSYMS</code></td><td>4.19+</td></tr><tr><td><code>KSU_KPROBES_KSUD</code></td><td><code>KPROBES &amp;&amp; KRETPROBES</code></td><td>deprecated</td></tr></tbody></table></div>
+<p>Both <code>BRANCH_LINK</code> and <code>KPROBES_KSUD</code> carry <code>depends on !KSU_TAMPER_SYSCALL_TABLE</code>. On a 4.9 kernel the Kconfig recommendation and the architectural fit point at the same option, so that is the one to use — not because it happens to work, but because it is the path the fork maintains for that kernel generation.</p>
+<h2 id="verification-not-vibes">Verification, not vibes</h2>
+<p>The things worth checking after booting such a build:</p>
+<ul><li><code>/proc/config.gz</code> shows the option <code>=y</code> (the CI injection must <em>replace</em> the</li></ul>
+<p><code># ... is not set</code> line, not append — the later line wins).</p>
+<ul><li><code>/proc/kallsyms</code> contains the hook symbols (<code>ksu_handle_execveat</code>, ...).</li><li><code>su -c id</code> returns <code>uid=0</code> on a real shell, not just <code>sudo</code>.</li><li>The manager stops showing the root warning.</li><li>dmesg shows the unhook of <code>read</code>/<code>newfstat</code> happening a few seconds after boot.</li></ul>
+<p>If the symbols are present but nothing is ever called, the config did not land. That is the failure mode this option exists to avoid.</p>
+</article>
+<a class="back" href="/">&larr; all posts</a>
+
+</main>
+<footer>
+  <span>HSB-Device — Kernel, root and low-level notes for the RMX1971 / Snapdragon 712</span>
+</footer>
+</body>
+</html>
